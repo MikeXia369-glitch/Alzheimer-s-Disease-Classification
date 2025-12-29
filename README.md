@@ -1,4 +1,4 @@
-# 🧠 Predicting Alzheimer’s Disease Diagnosis Using Machine Learning Models
+# Predicting Alzheimer’s Disease Diagnosis Using Machine Learning Models
 
 **Team Members:** Ken Li (cl7073), Mike Xia (zx1622)
 
