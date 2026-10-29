@@ -1,158 +1,61 @@
-# Predicting Alzheimer’s Disease Diagnosis Using Machine Learning Models
+# Predicting Alzheimer's Disease Diagnosis with Machine Learning
 
-##  Project Overview
-
-This project develops and evaluates machine learning models to predict **Alzheimer’s disease (AD)** diagnosis using a structured clinical dataset of 2,149 patients.
-
-We:
-
-- preprocessed and explored the dataset  
-- performed statistical tests  
-- engineered features  
-- trained multiple ML models  
-- compared their performance  
-- analyzed clinically meaningful feature importance  
-
-Our goal is to build:
-
-- an accurate predictive model  
-- **and** an interpretable framework for identifying key risk factors associated with AD diagnosis
-
----
+This is our final project for 381. We used a Kaggle dataset of 2,149 patients and trained five classifiers to predict whether a patient has Alzheimer's disease (AD). Along the way we found a data leakage problem, and we ran a few checks to understand why the tree models did so well.
 
 ## Dataset
 
-- **Source:** Kaggle  
-  `rabieelkharoua/alzheimers-disease-dataset`
-- **Samples:** 2,149 patients  
-- **Original features:** 35 
+- Source: [Alzheimer's Disease Dataset](https://www.kaggle.com/datasets/rabieelkharoua/alzheimers-disease-dataset) on Kaggle (by Rabie El Kharoua)
+- 2,149 patients, 35 columns: demographics, lifestyle, medical history, clinical measurements, cognitive/functional assessments, and symptoms
+- Target: `Diagnosis` (0 = no AD, 1 = AD), about 35% positive
+- No missing values
 
-### Data processing steps
+The notebook downloads the data automatically with `kagglehub`. If you already have the CSV, comment out that part and use `pd.read_csv("alzheimers_disease_data.csv")` instead.
 
-- removed:
-  - PatientID  
-  - DoctorInCharge  
-- verified missing values → none  
-- categorized features into:
-  - binary  
-  - multiclass categorical  
-  - numerical  
-- one-hot encoded:
-  - Ethnicity  
-  - EducationLevel  
-- feature count increased **32 → 36**
+## How to run
 
----
+Open `381_Final_Project_Alzheimer.ipynb` in Google Colab or Jupyter and run all cells. Required packages:
 
-## Methods
+```
+pandas numpy matplotlib seaborn scipy scikit-learn xgboost kagglehub
+```
 
-### Data Preparation
+## What we did
 
-- train/test split (80/20, stratified, random_state=42)  
-- standardized numerical variables using **StandardScaler**
-- avoided data leakage (fit on train only)
-- PCA visualization (2D)
+1. **EDA and statistical tests.** We looked at feature distributions and ran a Welch t-test (MMSE), a Pearson correlation (FunctionalAssessment) and chi-square tests (smoking, age group) to compare AD and non-AD patients.
+2. **Preprocessing.** We dropped `PatientID` and `DoctorInCharge`, one-hot encoded `Ethnicity` and `EducationLevel` (32 → 36 features), did a stratified 80/20 train/test split, and fit `StandardScaler` on the training set only.
+3. **Models.** Logistic Regression, SVM (RBF), two Random Forests with different hyperparameters, and XGBoost.
+4. **Evaluation.** 5-fold stratified CV AUROC on the training set, then test AUROC, accuracy and confusion matrices on the held-out test set. For LR and SVM, scaling happens inside a pipeline so the CV folds don't leak.
+5. **Feature importance.** Permutation importance for LR and SVM, and built-in importance for RF and XGBoost.
+6. **Leakage and sanity checks.** Explained below.
 
-> PCA explained ≈ **8.06%** of variance  
-> → strong overlap between AD and non-AD  
-> → poor linear separability in low dimensions
+## Results
 
----
+| Model | CV AUROC | Test AUROC | Test Accuracy | False Negatives |
+|---|---|---|---|---|
+| Logistic Regression | 0.903 ± 0.012 | 0.886 | 0.816 | 41 |
+| SVM | 0.891 ± 0.017 | 0.893 | 0.823 | 44 |
+| Random Forest (rf1) | 0.954 ± 0.010 | 0.941 | 0.942 | 17 |
+| Random Forest (rf2) | 0.955 ± 0.010 | 0.942 | 0.940 | 18 |
+| **XGBoost** | **0.958 ± 0.011** | **0.944** | **0.947** | **14** |
 
-## Statistical Analysis
+The test set has 430 patients, 152 of them with AD.
 
-We compared AD vs non-AD groups:
+The three tree models are clearly better than LR and SVM, but they're basically tied with each other on AUROC. We picked **XGBoost** as the final model because it misses the fewest real AD cases, and in a screening setting a false negative is the more costly mistake.
 
-- **Welch t-test (MMSE)**
-  - significant difference (*p < 0.05*)
-  - AD mean ≈ 12
-  - non-AD mean ≈ 16.3
+## Key findings
 
-- **Pearson correlation (FunctionalAssessment)**
-  - r ≈ −0.36, *p << 0.05*
-  - better function → lower AD probability
+**PatientID was leaking information.** In an early version of the notebook we forgot to drop `PatientID`, and the tree models got around 0.98 to 0.99 AUROC, which seemed too good. When we compared CV AUROC with and without the ID, Random Forest went from 0.951 to 0.984 and XGBoost from 0.953 to 0.992. Logistic Regression didn't change. PatientID by itself only gets 0.54 AUROC, so trees seem to be combining ID ranges with the real features to pick up some pattern from how the data was generated. All the final results above are computed without it.
 
-- **Chi-square tests**
-  - Smoking vs Diagnosis → not significant (p ≈ 0.86)
-  - Age group vs Diagnosis → not significant (p ≈ 0.32)
+**Five features carry almost all the signal.** FunctionalAssessment, ADL, MMSE, MemoryComplaints and BehavioralProblems are the top five for every model. A Random Forest trained on only these five gets 0.949 AUROC, about the same as with all features. A Random Forest trained on everything *except* these five gets 0.513, which is basically random. Lifestyle factors, blood pressure, cholesterol, age, smoking and so on add nothing in this dataset.
 
----
+## Limitations
 
-## 🤖 Machine Learning Models
+- The dataset looks at least partly synthetic. Age and BMI are almost perfectly uniform, age shows no association with diagnosis, and the label is almost fully explained by a handful of scores. The AUROC numbers here probably wouldn't hold on real clinical data.
+- The strongest predictors (functional assessments, MMSE) are part of how Alzheimer's actually gets diagnosed, so the model is closer to summarizing an existing assessment than predicting the disease early.
+- 2,149 patients is a fairly small sample.
 
-We trained and evaluated:
+## Future work
 
-- Logistic Regression
-- Support Vector Machine (SVM)
-- Random Forest (baseline RF1)
-- Random Forest (tuned RF2)
-- XGBoost
-
-### Evaluation metrics
-
-- K-Fold cross-validation
-- accuracy
-- confusion matrix
-- **AUROC (primary metric)**
-
----
-
-##  Model Performance Summary
-
-| Model | AUROC | Key Observation |
-|------|------|----------------|
-| Logistic Regression | ~0.89 | interpretable, low FN |
-| SVM | ~0.89 | higher false negatives |
-| Random Forest (RF1) | 0.9409 | strong performance |
-| Random Forest (RF2 – tuned) | **0.9419** | highest AUROC |
-| XGBoost | 0.9400 | **fewest false negatives** |
-
-### False negatives (clinical importance)
-
-- Logistic Regression → 16  
-- **SVM → 44 (worst)**  
-- Random Forest RF1 → 17  
-- Random Forest RF2 → 18  
-- **XGBoost → 16 (best clinical result)**  
-
-> In Alzheimer’s disease, **false negatives are worse than false positives**  
-> because missing a true AD case delays diagnosis and treatment.
-
----
-
-##  Feature Importance
-
-Most important predictors across models:
-
-- FunctionalAssessment
-- Activities of Daily Living (ADL)
-- MMSE score
-- MemoryComplaints
-- BehavioralProblems
-
-These align with clinical understanding:
-
-- functional decline  
-- cognitive impairment  
-- behavioral symptoms  
-
----
-
-## Recommendation
-
-We recommend **XGBoost** as the primary model:
-
-- AUROC ≈ 0.94  
-- **lowest false negatives**
-- robust to nonlinear relationships
-- interpretable feature importance
-
----
-
-##  Future Work
-
-- expand dataset size
-- external dataset validation
-- include longitudinal follow-ups
-- integrate imaging/genomic biomarkers
-- cost-sensitive training to penalize false negatives
+- Validate on a real cohort such as ADNI.
+- Tune the XGBoost classification threshold to reduce false negatives further.
+- Train without the cognitive/functional scores to see whether lifestyle and medical history alone have any predictive value.
