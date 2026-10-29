@@ -1,7 +1,5 @@
 # Predicting Alzheimer’s Disease Diagnosis Using Machine Learning Models
 
----
-
 ##  Project Overview
 
 This project develops and evaluates machine learning models to predict **Alzheimer’s disease (AD)** diagnosis using a structured clinical dataset of 2,149 patients.
